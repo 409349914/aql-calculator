@@ -16,12 +16,8 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
         }
         webView.webViewClient = WebViewClient()
-        webView.loadUrl("file:///android_asset/index.html")
+        val html = assets.open("index.html").bufferedReader().use { it.readText() }
+        webView.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
         setContentView(webView)
-    }
-
-    override fun onBackPressed() {
-        val wv = findViewById<WebView>(android.R.id.content).getChildAt(0) as? WebView
-        if (wv != null && wv.canGoBack()) wv.goBack() else super.onBackPressed()
     }
 }
