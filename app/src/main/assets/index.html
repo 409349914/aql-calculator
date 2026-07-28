@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>AQL 抽样方案计算器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f4f8;padding:16px;min-height:100vh}
+.card{background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+
+/* header */
+.header{text-align:center;margin-bottom:12px}
+.header h1{font-size:20px;color:#1a237e;margin-bottom:2px}
+.header p{font-size:12px;color:#888}
+
+/* disclaimer */
+.disclaimer{background:#fff3e0;border:2px solid #e65100;border-radius:8px;padding:10px 12px;margin-bottom:12px}
+.disclaimer-head{display:flex;align-items:center;gap:4px;margin-bottom:4px}
+.disclaimer-head .icon{color:#e65100;font-size:15px}
+.disclaimer-head .title{font-size:12px;font-weight:700;color:#bf360c}
+.disclaimer-body{font-size:11px;color:#bf360c;line-height:1.5}
+
+/* form */
+.form-group{margin-bottom:14px}
+.form-group:last-child{margin-bottom:0}
+label{display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:4px}
+.input-row{display:flex;gap:10px}
+.input-row .form-group{flex:1;margin-bottom:0}
+input[type=number]{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:16px;text-align:center;outline:0;transition:border-color .2s}
+input[type=number]:focus{border-color:#1a237e}
+select{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:16px;text-align:center;background:#fff;outline:0;appearance:auto;transition:border-color .2s}
+select:focus{border-color:#1a237e}
+
+.limits-text{font-size:11px;color:#888;margin-top:4px;text-align:center}
+
+/* button */
+.btn{width:100%;padding:12px;border:0;border-radius:8px;font-size:16px;font-weight:700;color:#fff;background:#1a237e;cursor:pointer;transition:background .2s}
+.btn:active{background:#283593}
+
+/* result */
+.result-box{display:none;background:#e8f5e9;border:2px solid #2e7d32;border-radius:8px;padding:16px;margin-top:4px;text-align:center}
+.result-box.show{display:block}
+.result-title{font-size:14px;font-weight:700;color:#1b5e20;margin-bottom:8px}
+.result-item{font-size:22px;font-weight:700;color:#2e7d32;margin:6px 0}
+
+/* error */
+.error{display:none;font-size:12px;color:#c62828;text-align:center;padding:6px 0}
+.error.show{display:block}
+
+/* lang toggle */
+.lang-bar{text-align:right;margin-bottom:8px}
+.lang-bar button{font-size:12px;padding:4px 12px;border:1px solid #ccc;border-radius:12px;background:#fff;color:#555;cursor:pointer}
+
+/* footer */
+.footer{text-align:center;font-size:10px;color:#aaa;margin-top:20px;padding-bottom:12px}
+
+@media(prefers-color-scheme:dark){
+  body{background:#121212}
+  .card{background:#1e1e1e;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .header h1{color:#7986cb}
+  label{color:#ccc}
+  input[type=number],select{background:#2a2a2a;border-color:#444;color:#eee}
+  .limits-text{color:#777}
+  .lang-bar button{background:#2a2a2a;border-color:#444;color:#aaa}
+  .disclaimer{background:#2a2010;border-color:#bf360c}
+  .disclaimer-body,.disclaimer-head .title{color:#ff8a65}
+  .result-box{background:#1b2e1b}
+  .result-item{color:#a5d6a7}
+  .result-title{color:#81c784}
+}
+</style>
+</head>
+<body>
+
+<div class="lang-bar"><button id="langBtn" onclick="toggleLang()">English</button></div>
+
+<div class="header">
+  <h1 id="title">AQL 抽样方案计算器</h1>
+  <p id="subtitle">基于二项分布 | 生产方风险 ≤ 5%</p>
+</div>
+
+<div class="disclaimer" id="disclaimer">
+  <div class="disclaimer-head">
+    <span class="icon">⚠️</span>
+    <span class="title" id="dTitle">DISCLAIMER / 免责声明</span>
+  </div>
+  <div class="disclaimer-body" id="dBody">注意：本工具仅用于非标准抽样数基于统计模型的推导参考，并非等同于 ISO 2859。标准抽样方案，请优先参考 ISO 2859 等标准表格。</div>
+</div>
+
+<div class="card">
+  <div class="form-group">
+    <label id="lN">抽样数 n：</label>
+    <input type="number" id="nInput" min="1" step="1" placeholder="" onkeydown="if(event.key==='Enter')calc()">
+  </div>
+  <div class="input-row">
+    <div class="form-group">
+      <label id="lMajor">Major AQL：</label>
+      <select id="majorSelect"><option value="1.0">1.0</option><option value="2.5" selected>2.5</option><option value="4.0">4.0</option></select>
+    </div>
+    <div class="form-group">
+      <label id="lMinor">Minor AQL：</label>
+      <select id="minorSelect"><option value="1.0">1.0</option><option value="2.5">2.5</option><option value="4.0" selected>4.0</option></select>
+    </div>
+  </div>
+  <div class="limits-text" id="limits">AQL上限: 1.0→n≤1200 | 2.5→n≤1000 | 4.0→n≤800</div>
+</div>
+
+<button class="btn" id="calcBtn" onclick="calc()">计算</button>
+
+<div class="error" id="error"></div>
+
+<div class="result-box" id="result">
+  <div class="result-title" id="rTitle">计算结果</div>
+  <div class="result-item" id="rMajor"></div>
+  <div class="result-item" id="rMinor"></div>
+</div>
+
+<div class="footer">AQL Calculator v1.0</div>
+
+<script>
+const AQL_LIMITS = {1:1200, 2.5:1000, 4:800}
+const LANG = {
+  cn:{
+    title:'AQL 抽样方案计算器', subtitle:'基于二项分布 | 生产方风险 ≤ 5%',
+    dTitle:'DISCLAIMER / 免责声明',
+    dBody:'注意：本工具仅用于非标准抽样数基于统计模型的推导参考，并非等同于 ISO 2859。标准抽样方案，请优先参考 ISO 2859 等标准表格。',
+    lN:'抽样数 n：', lMajor:'Major AQL：', lMinor:'Minor AQL：',
+    limits:'AQL上限: 1.0→n≤1200 | 2.5→n≤1000 | 4.0→n≤800',
+    calc:'计算', rTitle:'计算结果',
+    errN:'请输入有效的正整数！',
+    errL:'{name} AQL={aql}% 要求 n ≤ {limit}，当前 n={n}',
+    fmtM:'Major AQL = {aql}%  →  Ac = {ac}',
+    fmtI:'Minor AQL = {aql}%  →  Ac = {ac}',
+    lang:'English'
+  },
+  en:{
+    title:'AQL Sampling Plan Calculator', subtitle:'Binomial Distribution | Producer Risk ≤ 5%',
+    dTitle:'DISCLAIMER / 免责声明',
+    dBody:'NOTICE: This tool provides statistical reference for non-standard sample sizes only. It is NOT equivalent to ISO 2859. For standard sampling plans, please refer to ISO 2859 tables.',
+    lN:'Sample size n:', lMajor:'Major AQL:', lMinor:'Minor AQL:',
+    limits:'Limits: 1.0→n≤1200 | 2.5→n≤1000 | 4.0→n≤800',
+    calc:'Calculate', rTitle:'Results',
+    errN:'Please enter a valid positive integer.',
+    errL:'ERROR: {name} AQL={aql}% requires n ≤ {limit}, got n={n}.',
+    fmtM:'Major AQL = {aql}%  →  Ac = {ac}',
+    fmtI:'Minor AQL = {aql}%  →  Ac = {ac}',
+    lang:'中文'
+  }
+}
+let lang = 'cn'
+
+function toggleLang(){
+  lang = lang==='cn'?'en':'cn'
+  applyLang()
+}
+function applyLang(){
+  const t = LANG[lang]
+  document.getElementById('title').textContent = t.title
+  document.getElementById('subtitle').textContent = t.subtitle
+  document.getElementById('dTitle').textContent = t.dTitle
+  document.getElementById('dBody').textContent = t.dBody
+  document.getElementById('lN').textContent = t.lN
+  document.getElementById('lMajor').textContent = t.lMajor
+  document.getElementById('lMinor').textContent = t.lMinor
+  document.getElementById('limits').textContent = t.limits
+  document.getElementById('calcBtn').textContent = t.calc
+  document.getElementById('rTitle').textContent = t.rTitle
+  document.getElementById('langBtn').textContent = t.lang
+  document.getElementById('error').className = 'error'
+}
+
+function binomCDF(k, n, p){
+  let total = Math.pow(1-p, n), s = total, q = 1-p
+  for(let i=1; i<=k; i++){
+    total = total * (n-i+1) * p / q / i
+    s += total
+  }
+  return s
+}
+
+function calcAc(n, aql){
+  const p = aql / 100
+  for(let ac=0; ac<=n; ac++){
+    if(1 - binomCDF(ac, n, p) <= 0.05) return ac
+  }
+  return n
+}
+
+function calc(){
+  const t = LANG[lang]
+  const el = document.getElementById('error')
+  const rb = document.getElementById('result')
+  rb.classList.remove('show')
+  el.classList.remove('show')
+  el.textContent = ''
+  document.getElementById('rMajor').textContent = ''
+  document.getElementById('rMinor').textContent = ''
+
+  const nStr = document.getElementById('nInput').value.trim()
+  const n = parseInt(nStr)
+  if(!nStr || isNaN(n) || n<=0){
+    el.textContent = t.errN; el.classList.add('show')
+    return
+  }
+
+  const mVal = parseFloat(document.getElementById('majorSelect').value)
+  const iVal = parseFloat(document.getElementById('minorSelect').value)
+
+  const checks = [
+    {val:mVal, name:t.lMajor.replace(':',''), tag:'Major'},
+    {val:iVal, name:t.lMinor.replace(':',''), tag:'Minor'}
+  ]
+
+  for(const c of checks){
+    if(AQL_LIMITS[c.val] && n > AQL_LIMITS[c.val]){
+      el.textContent = t.errL.replace('{name}',c.name).replace('{aql}',c.val).replace('{limit}',AQL_LIMITS[c.val]).replace('{n}',n)
+      el.classList.add('show'); return
+    }
+  }
+
+  const acM = calcAc(n, mVal)
+  const acI = calcAc(n, iVal)
+
+  document.getElementById('rMajor').textContent = t.fmtM.replace('{aql}',mVal).replace('{ac}',acM)
+  document.getElementById('rMinor').textContent = t.fmtI.replace('{aql}',iVal).replace('{ac}',acI)
+  rb.classList.add('show')
+}
+
+applyLang()
+</script>
+</body>
+</html>
